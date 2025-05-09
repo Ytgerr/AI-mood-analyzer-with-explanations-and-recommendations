@@ -11,9 +11,9 @@ pip install -r requirements.txt
 ### 2. Start the FastAPI Backend
 
 ```bash
-uvicorn backend.main:app --reload
+uvicorn app.main:app --reload
 ```
 ### 3. Start the Streamlit Frontend
 
 ```bash
-streamlit run frontend/app.py
+streamlit run app/interface.py
