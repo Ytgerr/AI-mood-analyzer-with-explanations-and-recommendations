@@ -17,3 +17,4 @@ venv/
 *.json
 static/
 media/
+users.txt
