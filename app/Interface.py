@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import time
 from datetime import datetime
+import matplotlib.pyplot as plt
+import numpy as np
 
 def get_time_period():
     hour = datetime.now().hour
@@ -125,6 +127,10 @@ else:
         if "error" in data:
             st.error(data["error"])
         else:
+            time_record = time.time()
+            t_struct = time.localtime(time_record)
+            with open("scores.txt", "a") as file:
+                file.write(f"{st.session_state.login} {data["label"]} {get_time_period()} {time.strftime("%Y-%m-%d %H:%M:%S", t_struct)}\n")
             st.subheader("Result of analyze:")
             st.write("Responce: ", data["label"])
 
@@ -138,6 +144,55 @@ else:
             st.write(
                 f"These words are characteristic of a {data['label']} mood, and they determined the algorithm of the final decision.")
 
+            if st.button("Plot a 1-day mood graph"):
+
+                time_ranges = ("morning", "noon", "evening","night")
+                time_index = {
+                    "morning": 0,
+                    "noon": 1,
+                    "evening": 2,
+                    "night": 3
+                }
+                with open("scores.txt") as file:
+                    positives= [0]*4
+                    neutrals= [0]*4
+                    negatives = [0]*4
+                    for line in file:
+                        name, label, time_range, date, date_time = line.strip().split(" ")
+                        idx = time_index.get(time_range, None)
+                        if idx is not None:
+                            if label == "Positive":
+                                positives[idx] += 1
+                            elif label == "Neutral":
+                                neutrals[idx] += 1
+                            else:
+                                negatives[idx] += 1
+                day_figures = {
+                    'Positives': (positives[0],positives[1],positives[2],positives[3]),
+                    'Neutrals': (neutrals[0],neutrals[1],neutrals[2],neutrals[3]),
+                    'Negatives': (negatives[0],negatives[1],negatives[2],negatives[3]),
+                }
+
+                x = np.arange(len(time_ranges))
+                width = 0.25
+                multiplier = 0
+
+                fig, ax = plt.subplots(layout='constrained')
+
+                for attribute, measurement in day_figures.items():
+                    offset = width * multiplier
+                    rects = ax.bar(x + offset, measurement, width, label=attribute)
+                    ax.bar_label(rects, padding=3)
+                    multiplier += 1
+                ax.set_ylabel('Count')
+                ax.set_title('Mood dynamic by a time period')
+                ax.set_xticks(x + width, time_ranges)
+                ax.legend(loc='upper left', ncols=3)
+                all_counts = positives + neutrals + negatives
+                y_max = max(all_counts) if all_counts else 0
+                y_top = y_max * 1.2
+                ax.set_ylim(0, y_top)
+                st.pyplot(fig)
             st.subheader("📢 Feedback")
             with st.form(key="feedback_form"):
                 feedback = st.radio(
