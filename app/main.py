@@ -90,7 +90,8 @@ async def lifespan(app: FastAPI):
     tokenizer = AutoTokenizer.from_pretrained(model)
     model = AutoModelForSequenceClassification.from_pretrained(model)
     model.eval()
-    sentiment_pipeline = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer)
+    sentiment_pipeline = pipeline(
+        "sentiment-analysis", model=model, tokenizer=tokenizer)
     app.state.advance_model = model
     app.state.pipeline = sentiment_pipeline
     app.state.tokin = tokenizer
@@ -195,7 +196,7 @@ def process_text(item: Item, request: Request):
             "explanation": explanation_words
         }
     else:
-        
+
         label_mapping = {
             "LABEL_0": "negative",
             "LABEL_1": "neutral",
@@ -203,10 +204,11 @@ def process_text(item: Item, request: Request):
         }
 
         text = item.text
-        inputs = request.app.state.tokin(text, return_tensors="pt", padding=True, truncation=True)
-        input_ids = inputs['input_ids'].long()  
+        inputs = request.app.state.tokin(
+            text, return_tensors="pt", padding=True, truncation=True)
+        input_ids = inputs['input_ids'].long()
         attention_mask = inputs['attention_mask']
-        
+
         result = request.app.state.pipeline(text)
         label = result[0]['label']
         mapped_label = label_mapping[label]
@@ -214,9 +216,10 @@ def process_text(item: Item, request: Request):
         label_to_index = {"LABEL_0": 0, "LABEL_1": 1, "LABEL_2": 2}
         target = label_to_index[label]
 
-        embedding_layer = request.app.state.advance_model.roberta.embeddings  
+        embedding_layer = request.app.state.advance_model.roberta.embeddings
         with torch.no_grad():
-            embeddings = embedding_layer(input_ids).clone().detach().requires_grad_(True)
+            embeddings = embedding_layer(
+                input_ids).clone().detach().requires_grad_(True)
 
         def forward_func(embeddings, attention_mask):
             model_inputs = {
@@ -237,15 +240,17 @@ def process_text(item: Item, request: Request):
 
         attributions_sum = attributions.sum(dim=-1).squeeze(0)
         attributions_sum = attributions_sum.detach().numpy()
-        tokens = request.app.state.tokin.convert_ids_to_tokens(input_ids.squeeze(0))
+        tokens = request.app.state.tokin.convert_ids_to_tokens(
+            input_ids.squeeze(0))
         tokens = [token.replace("Ġ", "") for token in tokens]
 
         attributions_sum = attributions_sum / np.max(np.abs(attributions_sum))
-        top_indices = np.argsort(np.abs(attributions_sum))[-3:]  
+        top_indices = np.argsort(np.abs(attributions_sum))[-3:]
         explanation_words = []
         for idx in top_indices:
-            score = float(attributions_sum[idx])  
-            explanation_words.append({"word": tokens[idx], "score": round(score, 3)})
+            score = float(attributions_sum[idx])
+            explanation_words.append(
+                {"word": tokens[idx], "score": round(score, 3)})
 
         return {
             "label": mapped_label,

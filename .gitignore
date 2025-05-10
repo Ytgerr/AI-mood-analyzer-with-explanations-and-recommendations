@@ -18,3 +18,4 @@ venv/
 static/
 media/
 users.txt
+scores.txt
