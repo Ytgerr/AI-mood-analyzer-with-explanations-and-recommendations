@@ -7,10 +7,8 @@ def get_time_period():
     hour = datetime.now().hour
     if 5 <= hour < 12:
         return "morning"
-    elif 12 <= hour < 17:
+    elif 12 <= hour < 21:
         return "noon"
-    elif 17 <= hour < 21:
-        return "evening"
     else:
         return "night"
 
