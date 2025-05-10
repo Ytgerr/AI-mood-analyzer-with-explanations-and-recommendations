@@ -3,10 +3,6 @@ import requests
 import time
 from datetime import datetime
 
-# login_dialog и reg_dialog - это окошки, вызываемые при
-# нажатии соответствующих кнопок
-
-
 def get_time_period():
     hour = datetime.now().hour
     if 5 <= hour < 12:
@@ -49,7 +45,6 @@ def reg_dialog():
         if submit:
             with open("users.txt", "a") as file:
                 file.write(f"{login} {password} {int(age)}\n")
-
             st.session_state.login = login
             st.session_state.password = password
             st.session_state.age = int(age)
@@ -61,17 +56,16 @@ def reg_dialog():
 
 st.title("AI Mood Analyzer")
 
-# Инициализация логина и пароля в session_state
-# для первого захода (как я понял)
-
 if "login" not in st.session_state:
     st.session_state.login = None
 if "password" not in st.session_state:
     st.session_state.password = None
-
-# Проверка наличия логина
-# Если его нет - показываются кнопки регистрации и логина
-# Если есть - Показывается всё остальное: выбор модели, инпут и т.д.
+if "analysis_result" not in st.session_state:
+    st.session_state.analysis_result = None
+if "feedback_submitted" not in st.session_state:
+    st.session_state.feedback_submitted = False
+if "feedback_message" not in st.session_state:
+    st.session_state.feedback_message = ""
 
 if st.session_state.login is None:
     login_btn = st.button("Login")
@@ -86,6 +80,9 @@ else:
         st.session_state.login = None
         st.session_state.password = None
         st.session_state.age = None
+        st.session_state.analysis_result = None
+        st.session_state.feedback_submitted = False
+        st.session_state.feedback_message = ""
         st.rerun()
 
     st.sidebar.subheader("💡 Choose a model")
@@ -94,41 +91,79 @@ else:
     
     **Advanced Model**: This model uses additional features and more advanced algorithms to achieve better accuracy. It may take more time to analyze text but provides more detailed results.
     """)
-    chosen_model = st.sidebar.selectbox(
-        "Choose the model", ['simple', 'advance'])
+    chosen_model = st.sidebar.selectbox("Choose the model", ['simple', 'advance'])
 
     st.write("Chosen model:", chosen_model)
     time_of_day = get_time_period()
 
-    text_input = st.text_input("Write text:")
+    with st.form(key="text_analysis_form"):
+        text_input = st.text_input("Write text:")
+        submit_button = st.form_submit_button("Send")
 
-    if st.button("Send"):
-
-        if text_input:
+        if submit_button and text_input:
+            st.session_state.analysis_result = None
+            st.session_state.feedback_submitted = False
+            st.session_state.feedback_message = ""
             with st.spinner('Analyzing your text...'):
                 try:
                     response = requests.post(
-                        "http://localhost:8000/process/", json={"text": text_input,
-                                                                "model": chosen_model,
-                                                                "time": time_of_day,
-                                                                "age": st.session_state.age
-                                                                }
+                        "http://localhost:8000/process/",
+                        json={
+                            "text": text_input,
+                            "model": chosen_model,
+                            "time": time_of_day,
+                            "age": st.session_state.age
+                        }
                     )
                     if response.status_code == 200:
-                        data = response.json()
-                        st.subheader("Result of analyze:")
-                        st.write("Responce: ", data["label"])
-
-                        st.subheader("💡 Explanation:")
-                        st.write(
-                            f"The model determined that the message was categorized as {data['label']} because it contained the words:")
-                        for item in data["explanation"]:
-                            word = item["word"]
-                            score = item["score"]
-                            st.write(f"- **{word}** → influence: {score:+}")
-                        st.write(
-                            f"These words are characteristic of a {data['label']} mood, and they determined the algorithm of the final decision.")
+                        st.session_state.analysis_result = response.json()
                     else:
-                        st.error("Error")
+                        st.session_state.analysis_result = {"error": "Server error"}
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.session_state.analysis_result = {"error": f"Error: {e}"}
+
+    if st.session_state.analysis_result:
+        data = st.session_state.analysis_result
+        if "error" in data:
+            st.error(data["error"])
+        else:
+            st.subheader("Result of analyze:")
+            st.write("Responce: ", data["label"])
+
+            st.subheader("💡 Explanation:")
+            st.write(
+                f"The model determined that the message was categorized as {data['label']} because it contained the words:")
+            for item in data["explanation"]:
+                word = item["word"]
+                score = item["score"]
+                st.write(f"- **{word}** → influence: {score:+}")
+            st.write(
+                f"These words are characteristic of a {data['label']} mood, and they determined the algorithm of the final decision.")
+
+            st.subheader("📢 Feedback")
+            with st.form(key="feedback_form"):
+                feedback = st.radio(
+                    "Do you think the answer was correct?",
+                    ("True", "False"),
+                    key="feedback_radio"
+                )
+
+                report_option = None
+                if feedback == "False":
+                    report_option = st.selectbox(
+                        "What should the correct label be?",
+                        ["Negative", "Neutral", "Positive"],
+                        key="report_selectbox"
+                    )
+
+                submit_feedback = st.form_submit_button("Submit feedback")
+
+                if submit_feedback:
+                    if feedback == "False" and report_option:
+                        st.session_state.feedback_message = f"✅ Thanks! You marked it as incorrect. Correct label should be: {report_option}"
+                    else:
+                        st.session_state.feedback_message = "✅ Thanks! You confirmed the result is correct."
+                    st.session_state.feedback_submitted = True
+
+            if st.session_state.feedback_submitted:
+                st.success(st.session_state.feedback_message)
