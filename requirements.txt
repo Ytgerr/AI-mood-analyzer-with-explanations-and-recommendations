@@ -1,10 +1,14 @@
 fastapi
 uvicorn
-streamlit
-scikit-learn
+pydantic
 pandas
 numpy
-scipy
+scikit-learn
 nltk
+transformers
+torch
+captum
 lime
+matplotlib
+streamlit
 requests
